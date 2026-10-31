@@ -111,6 +111,29 @@ export async function deleteDocument(workspaceId: string, documentId: string) {
     );
 }
 
+export async function getPassage(workspaceId: string, chunkId: string) {
+  const [row] = await db
+    .select({
+      chunkId: chunks.id,
+      documentId: chunks.documentId,
+      title: documents.title,
+      position: chunks.position,
+      content: chunks.content,
+    })
+    .from(chunks)
+    .innerJoin(documents, eq(chunks.documentId, documents.id))
+    .where(
+      and(
+        eq(chunks.id, chunkId),
+        eq(chunks.workspaceId, workspaceId),
+        eq(documents.workspaceId, workspaceId),
+      ),
+    )
+    .limit(1);
+
+  return row ?? null;
+}
+
 export async function searchKnowledge(workspaceId: string, query: string) {
   const trimmed = query.trim().slice(0, 2000);
   if (!trimmed) return [];

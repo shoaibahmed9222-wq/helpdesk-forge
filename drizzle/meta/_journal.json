@@ -8,6 +8,13 @@
       "when": 1793477887022,
       "tag": "0000_flowery_shooting_star",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793480178555,
+      "tag": "0001_kind_rawhide_kid",
+      "breakpoints": true
     }
   ]
 }

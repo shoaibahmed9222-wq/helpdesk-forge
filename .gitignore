@@ -35,6 +35,9 @@ yarn-error.log*
 .env*.local
 !.env.example
 
+# local embedding model cache
+.cache/
+
 # vercel
 .vercel
 

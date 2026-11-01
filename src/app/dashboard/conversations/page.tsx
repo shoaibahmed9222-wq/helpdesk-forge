@@ -64,8 +64,8 @@ export default async function ConversationsPage({
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Conversations</h1>
         <p className="mt-2 max-w-xl text-sm leading-6 text-muted">
-          Email threads for this workspace. A draft stays here until someone
-          sends it.
+          Email and website chat for this workspace. An email draft stays here
+          until someone sends it.
         </p>
       </div>
       {error ? <p className="text-sm text-red-800">{error}</p> : null}
@@ -81,7 +81,11 @@ export default async function ConversationsPage({
                   <h2 className="text-sm font-medium">{thread.subject}</h2>
                   <p className="text-xs font-medium text-muted">{statusLabel[thread.status]}</p>
                 </div>
-                <p className="mt-1 text-sm text-muted">{thread.customerEmail}</p>
+                <p className="mt-1 text-sm text-muted">
+                  {thread.channel === "widget" ? "Website chat" : "Email"}
+                  {" · "}
+                  {thread.customerEmail || "No email left"}
+                </p>
               </div>
               <div className="space-y-4">
                 {thread.messages.map((message) => (
@@ -93,7 +97,9 @@ export default async function ConversationsPage({
                           ? "Draft"
                           : message.delivery === "handoff"
                             ? "Not sent"
-                            : "Sent"}
+                            : thread.channel === "widget"
+                              ? "Shown in chat"
+                              : "Sent"}
                     </p>
                     <p className="text-sm leading-6 whitespace-pre-wrap break-words">{message.body}</p>
                     {message.role === "assistant" ? <Sources citations={message.citations} /> : null}
@@ -105,7 +111,9 @@ export default async function ConversationsPage({
                     ) : null}
                     {message.delivery === "handoff" ? (
                       <p className="text-sm text-muted">
-                        Nothing was emailed. A person needs to take this.
+                        {thread.channel === "widget"
+                          ? "Nothing was emailed. The visitor can leave an email in the chat."
+                          : "Nothing was emailed. A person needs to take this."}
                       </p>
                     ) : null}
                   </div>

@@ -1,4 +1,5 @@
 import type { AdapterAccountType } from "@auth/core/adapters";
+import { sql } from "drizzle-orm";
 import {
   index,
   integer,
@@ -7,6 +8,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   vector,
 } from "drizzle-orm/pg-core";
 
@@ -88,6 +90,12 @@ export const workspaces = pgTable("workspace", {
     .$type<"auto" | "draft">()
     .notNull()
     .default("draft"),
+  // Empty title, greeting, or accent means the website chat uses its defaults.
+  widgetTitle: text("widget_title"),
+  widgetGreeting: text("widget_greeting"),
+  widgetAccent: text("widget_accent"),
+  // Newline-separated hostnames. Empty means any site may embed the chat.
+  widgetAllowedDomains: text("widget_allowed_domains"),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
 });
 
@@ -159,6 +167,7 @@ export const chunks = pgTable(
   ],
 );
 
+// Email and website chat share this table. channel is "email" or "widget".
 export const conversations = pgTable(
   "conversation",
   {
@@ -168,6 +177,12 @@ export const conversations = pgTable(
     workspaceId: text("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
+    channel: text("channel")
+      .$type<"email" | "widget">()
+      .notNull()
+      .default("email"),
+    // Anonymous browser id for website chat. Null on email threads.
+    visitorSessionId: text("visitor_session_id"),
     subject: text("subject").notNull(),
     customerEmail: text("customer_email").notNull(),
     status: text("status")
@@ -178,6 +193,9 @@ export const conversations = pgTable(
   },
   (conversation) => [
     index("conversation_workspace_id_idx").on(conversation.workspaceId),
+    uniqueIndex("conversation_widget_session_unique")
+      .on(conversation.workspaceId, conversation.visitorSessionId)
+      .where(sql`${conversation.visitorSessionId} is not null`),
   ],
 );
 

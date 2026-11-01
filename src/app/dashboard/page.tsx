@@ -42,6 +42,22 @@ export default async function DashboardPage() {
           .
         </p>
       </section>
+      <section className="space-y-3 rounded-lg border border-line bg-card p-5">
+        <h2 className="text-sm font-medium">Website chat</h2>
+        <p className="text-sm leading-6 text-muted">
+          Put a chat bubble on your site. It answers from the same docs and
+          shows up in{" "}
+          <Link href="/dashboard/conversations" className="text-accent underline-offset-2 hover:underline">
+            Conversations
+          </Link>{" "}
+          with your email.
+        </p>
+        <p className="text-sm leading-6">
+          <Link href="/dashboard/widget" className="text-accent underline-offset-2 hover:underline">
+            Get the install snippet
+          </Link>
+        </p>
+      </section>
     </div>
   );
 }

@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { getReplyMode, workspaceInboundAddress } from "@/lib/email-channel";
 import { llmStatus } from "@/lib/llm-config";
 import { requireWorkspace } from "@/lib/workspace";
@@ -129,8 +131,12 @@ export default async function SettingsPage({
           <span className="font-medium text-ink">Authorization: Bearer</span> and
           this public key. The key selects this workspace. It cannot list
           documents, change settings, or read the model key. Anyone who has it
-          can ask questions, which spends the model key, so treat it as a
-          capability for the widget rather than an admin secret.
+          can ask questions, which spends the model key. The website chat uses
+          the same key. Install it, and set the title, greeting, and color, on{" "}
+          <Link href="/dashboard/widget" className="text-accent underline-offset-2 hover:underline">
+            Website chat
+          </Link>
+          .
         </p>
         <p className="break-all rounded-md bg-paper px-3 py-2 font-mono text-sm">
           {status.publicKey}

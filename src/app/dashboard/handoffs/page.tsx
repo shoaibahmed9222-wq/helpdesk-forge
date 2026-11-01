@@ -12,7 +12,8 @@ export default async function HandoffsPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Handoffs</h1>
         <p className="mt-2 max-w-xl text-sm leading-6 text-muted">
-          These emails were not answered. A person needs to reply.
+          These conversations were not answered. A person needs to reply.
+          Nothing was emailed.
         </p>
       </div>
       {threads.length === 0 ? (
@@ -24,7 +25,11 @@ export default async function HandoffsPage() {
             return (
               <article key={thread.id} className="space-y-2 rounded-lg border border-line bg-card p-5">
                 <h2 className="text-sm font-medium">{thread.subject}</h2>
-                <p className="text-sm text-muted">{thread.customerEmail}</p>
+                <p className="text-sm text-muted">
+                  {thread.channel === "widget" ? "Website chat" : "Email"}
+                  {" · "}
+                  {thread.customerEmail || "No email left"}
+                </p>
                 <p className="text-sm leading-6 whitespace-pre-wrap break-words">
                   {question?.body ?? "No message text."}
                 </p>

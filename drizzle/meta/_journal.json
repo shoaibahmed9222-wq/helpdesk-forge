@@ -29,6 +29,13 @@
       "when": 1793543650814,
       "tag": "0003_email_channel",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793549092666,
+      "tag": "0004_widget_channel",
+      "breakpoints": true
     }
   ]
 }

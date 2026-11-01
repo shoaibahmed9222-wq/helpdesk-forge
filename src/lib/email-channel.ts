@@ -34,6 +34,7 @@ export type EmailThreadMessage = {
 
 export type EmailThread = {
   id: string;
+  channel: "email" | "widget";
   subject: string;
   customerEmail: string;
   status: "open" | "answered" | "draft" | "handoff";
@@ -115,6 +116,7 @@ export async function listEmailThreads(workspaceId: string, status?: EmailThread
   const rows = await db
     .select({
       conversationId: conversations.id,
+      channel: conversations.channel,
       subject: conversations.subject,
       customerEmail: conversations.customerEmail,
       status: conversations.status,
@@ -143,6 +145,7 @@ export async function listEmailThreads(workspaceId: string, status?: EmailThread
     if (!thread) {
       thread = {
         id: row.conversationId,
+        channel: row.channel,
         subject: row.subject,
         customerEmail: row.customerEmail,
         status: row.status,

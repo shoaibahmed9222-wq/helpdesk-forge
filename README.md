@@ -42,6 +42,7 @@ Open [http://localhost:3000](http://localhost:3000). Enter an email address. In 
 | `SMTP_PORT` | SMTP port. Mailpit uses `1025`. |
 | `SMTP_USER` | Optional SMTP username. Leave empty for Mailpit. |
 | `SMTP_PASS` | Optional SMTP password. Leave empty for Mailpit. |
+| `WIDGET_RATE_LIMIT` | Optional. Website chat requests allowed per public key and IP each minute. Defaults to 20. |
 
 ## Knowledge base
 
@@ -51,7 +52,7 @@ Workspace owners add `.md`, `.txt`, or `.pdf` files, or paste text, on **Knowled
 
 ## Answers
 
-`answerQuestion` in `src/lib/answer.ts` is the channel-agnostic entry point. The dashboard, `POST /api/answer`, and the email channel all call it. The email channel stores the thread. `answerQuestion` itself does not. A later widget should call it too.
+`answerQuestion` in `src/lib/answer.ts` is the channel-agnostic entry point. The dashboard, `POST /api/answer`, the email channel, and the website chat all call it. Email and website chat store the thread in the same conversation tables. `answerQuestion` itself does not.
 
 It retrieves that workspace's passages, asks the model to answer only from those passages, and returns the answer, citations, and a `confident` or `unsure` signal with a reason. A citation is the document title plus the passage id and its position (`chunk.position`, starting at 0).
 
@@ -105,6 +106,33 @@ Authorization: Bearer <INBOUND_WEBHOOK_SECRET>
 Postmark can use HTTP Basic auth instead. The password is the same secret. The username can be anything. An unknown recipient is rejected. A repeated Message-ID is ignored. So are auto-replies and bounces (`Auto-Submitted` other than `no`, `Precedence: bulk` or `auto_reply`) and mail sent from one of our own inbound addresses.
 
 Replies are sent over SMTP from the workspace address. For local development, Mailpit is the SMTP server. A production deploy needs a domain you control and an inbound provider that POSTs this JSON. Point the domain's MX at that provider, set the webhook URL to this route, and set `INBOUND_DOMAIN` to that domain.
+
+## Website chat
+
+On **Website chat**, copy one line onto the business's site:
+
+```html
+<script src="https://your-app.example/widget.js" data-key="pk_..." async></script>
+```
+
+The script address is this app. `data-key` is the workspace public key from that page. It only lets a visitor ask a question. It cannot change settings, list documents, or read the model key.
+
+The bubble is isolated from the host page with a shadow root. Visitors see the title, greeting, and color saved on **Website chat**. A returning visitor keeps the same chat: the browser stores an anonymous session id in `localStorage`, and the server stores the thread in the same `conversation` and `message` tables as email, with `channel` set to `widget`.
+
+A covered question shows the answer and the source titles. An uncovered question shows exactly `I don't know. The docs don't cover that.` and asks for an email, which is optional. That thread is listed under **Handoffs**. This slice does not send any email.
+
+**Allowed sites** is empty by default, so any site can load the chat. Add one domain per line to reject other origins. The app's own origin is always allowed, so the preview keeps working. Requests are limited per public key and IP address (20 per minute, or `WIDGET_RATE_LIMIT`). Messages longer than 2000 characters are rejected.
+
+The widget calls:
+
+```http
+GET /api/widget/config?key=pk_...
+GET /api/widget/chat?key=pk_...&session=<visitor-id>
+POST /api/widget/chat?key=pk_...
+POST /api/widget/handoff?key=pk_...
+```
+
+Those routes send CORS headers. A disallowed `Origin` gets `403` and no answer. The chat route calls `answerQuestion` for that workspace only.
 
 ## Embeddings
 

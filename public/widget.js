@@ -147,7 +147,9 @@
       overflow-wrap: anywhere;
     }
     .assistant { background: #f3efe6; color: #1c1915; }
+    .team { background: #e7f0ee; color: #1c1915; }
     .customer { background: var(--accent); color: var(--ink); }
+    .who { margin: 0 0 4px; font-size: 11px; font-weight: 600; color: #6d645c; }
     .cites { margin: 6px 0 0; font-size: 12px; line-height: 1.4; color: #6d645c; }
     .cite { color: #0e5c56; margin-right: 8px; text-underline-offset: 2px; }
     .typing { align-self: flex-start; width: fit-content; color: #6d645c; font-size: 13px; }
@@ -225,8 +227,7 @@
   handoff.className = "handoff";
   handoff.hidden = true;
   const handoffCopy = document.createElement("p");
-  handoffCopy.textContent =
-    "A person on the team can follow up. Leave your email if you would like that. It is optional.";
+  handoffCopy.textContent = "Leave your email and we'll get back to you.";
   const handoffForm = document.createElement("form");
   const email = document.createElement("input");
   email.type = "email";
@@ -280,6 +281,7 @@
     emailProvided: false,
     dismissed: false,
     messages: [],
+    signature: "",
     config: {
       title: "Chat with us",
       greeting: "Hi. Ask a question and we will answer from our docs.",
@@ -303,6 +305,8 @@
     panel.setAttribute("aria-label", title.textContent);
   }
 
+  let poll = 0;
+
   function setOpen(next) {
     state.open = next;
     panel.classList.toggle("open", next);
@@ -310,7 +314,14 @@
     launcher.setAttribute("aria-label", next ? "Close chat" : "Open chat");
     if (next) host.setAttribute("data-open", "");
     else host.removeAttribute("data-open");
-    if (next) input.focus();
+    if (next) {
+      pullHistory(true);
+      if (!poll) poll = window.setInterval(() => pullHistory(true), 3000);
+      input.focus();
+    } else if (poll) {
+      window.clearInterval(poll);
+      poll = 0;
+    }
   }
 
   function showError(text) {
@@ -332,6 +343,49 @@
       return await response.json();
     } catch {
       return {};
+    }
+  }
+
+  function mapMessage(item) {
+    if (!item || (item.role !== "customer" && item.role !== "assistant" && item.role !== "human")) {
+      return null;
+    }
+    return {
+      role: item.role,
+      body: typeof item.body === "string" ? item.body : "",
+      citations: Array.isArray(item.citations)
+        ? item.citations.filter((title) => typeof title === "string")
+        : [],
+      handoff: item.handoff === true,
+    };
+  }
+
+  async function pullHistory(quiet) {
+    try {
+      const historyResponse = await fetch(apiUrl("/api/widget/chat", true), {
+        mode: "cors",
+        credentials: "omit",
+      });
+      const history = await readJson(historyResponse);
+      if (!historyResponse.ok) {
+        if (!quiet) showError(problem(historyResponse, history));
+        return false;
+      }
+      if (state.sending) return true;
+      const next = Array.isArray(history.messages)
+        ? history.messages.map(mapMessage).filter(Boolean)
+        : [];
+      const signature = JSON.stringify(next);
+      const emailProvided = history.emailProvided === true;
+      if (signature === state.signature && emailProvided === state.emailProvided) return true;
+      state.signature = signature;
+      state.emailProvided = emailProvided;
+      state.messages = next;
+      renderLog();
+      return true;
+    } catch {
+      if (!quiet) showError("Something went wrong. Please try again.");
+      return false;
     }
   }
 
@@ -377,7 +431,14 @@
       const mine = message.role === "customer";
       const wrap = document.createElement("div");
       wrap.className = mine ? "row user" : "row bot";
-      wrap.append(bubble(mine ? "customer" : "assistant", message.body));
+      if (message.role === "human") {
+        const who = document.createElement("p");
+        who.className = "who";
+        who.textContent = "Team";
+        wrap.append(who);
+      }
+      const kind = message.role === "human" ? "team" : mine ? "customer" : "assistant";
+      wrap.append(bubble(kind, message.body));
       const cites = message.role === "assistant" ? citations(message.citations) : null;
       if (cites) wrap.append(cites);
       log.append(wrap);
@@ -505,32 +566,13 @@
         accent: typeof config.accent === "string" ? config.accent : state.config.accent,
       };
       applyTheme();
-      const historyResponse = await fetch(apiUrl("/api/widget/chat", true), {
-        mode: "cors",
-        credentials: "omit",
-      });
-      const history = await readJson(historyResponse);
-      if (!historyResponse.ok) {
-        showError(problem(historyResponse, history));
+      const loaded = await pullHistory(false);
+      if (!loaded) {
         host.setAttribute("data-ready", "error");
         renderLog();
         return;
       }
-      state.emailProvided = history.emailProvided === true;
-      state.messages = Array.isArray(history.messages)
-        ? history.messages
-            .filter((item) => item && (item.role === "customer" || item.role === "assistant"))
-            .map((item) => ({
-              role: item.role,
-              body: typeof item.body === "string" ? item.body : "",
-              citations: Array.isArray(item.citations)
-                ? item.citations.filter((title) => typeof title === "string")
-                : [],
-              handoff: item.handoff === true,
-            }))
-        : [];
       host.setAttribute("data-ready", "true");
-      renderLog();
     } catch {
       showError("Something went wrong. Please try again.");
       host.setAttribute("data-ready", "error");

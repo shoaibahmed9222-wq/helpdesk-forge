@@ -1,10 +1,12 @@
 import Link from "next/link";
 
 import { getReplyMode, workspaceInboundAddress } from "@/lib/email-channel";
+import { DEFAULT_HANDOFF_MESSAGE, WIDGET_EMAIL_INVITE } from "@/lib/handoff-copy";
+import { getHandoffMessage } from "@/lib/handoff-message";
 import { llmStatus } from "@/lib/llm-config";
 import { requireWorkspace } from "@/lib/workspace";
 
-import { clearLlmSettings, saveEmailReplyMode, saveLlmSettings } from "./actions";
+import { clearLlmSettings, saveEmailReplyMode, saveHandoffMessage, saveLlmSettings } from "./actions";
 import { SubmitButton } from "../knowledge-base/submit-button";
 
 export const metadata = { title: "Settings · Helpdesk Forge" };
@@ -16,6 +18,9 @@ const errorCopy: Record<string, string> = {
   base: "Enter an https base URL. http is allowed only for localhost.",
   key: "Enter an API key. It is stored encrypted and is not shown again.",
   reply: "Choose auto-reply or draft only.",
+  handoff: "The handoff message must be 500 characters or fewer.",
+  "handoff-copy":
+    "Write the line the customer should see. Don't say the agent doesn't know, and don't mention docs.",
 };
 
 function first(value: string | string[] | undefined) {
@@ -37,6 +42,7 @@ export default async function SettingsPage({
   const { workspace, role } = await requireWorkspace();
   const status = await llmStatus(workspace.id);
   const replyMode = await getReplyMode(workspace.id);
+  const handoffMessage = await getHandoffMessage(workspace.id);
   const address = workspaceInboundAddress(workspace.slug);
   const error = errorCopy[first((await searchParams).error) ?? ""] ?? null;
 
@@ -111,7 +117,7 @@ export default async function SettingsPage({
             </fieldset>
             <p className="text-sm leading-6 text-muted">
               If your docs do not cover the question, nothing is emailed. It
-              shows up under Handoffs for a person to handle.
+              shows up under Handoffs for a person to reply.
             </p>
             <SubmitButton label="Save reply mode" pendingLabel="Saving…" />
           </form>
@@ -121,6 +127,37 @@ export default async function SettingsPage({
               ? "Auto-reply when confident is on. Only the workspace owner can change it."
               : "Draft only is on. Only the workspace owner can change it."}
           </p>
+        )}
+      </section>
+
+      <section className="space-y-4 rounded-lg border border-line bg-card p-5">
+        <div className="space-y-2">
+          <h2 className="text-sm font-medium">Handoff message</h2>
+          <p className="text-sm leading-6 text-muted">
+            Customers see this when the agent cannot answer. On your website,
+            the chat also says “{WIDGET_EMAIL_INVITE}”
+          </p>
+        </div>
+        {role === "owner" ? (
+          <form action={saveHandoffMessage} className="space-y-3">
+            <label className="block space-y-2 text-sm">
+              <span className="font-medium">Message</span>
+              <textarea
+                name="handoffMessage"
+                rows={3}
+                maxLength={500}
+                defaultValue={handoffMessage}
+                placeholder={DEFAULT_HANDOFF_MESSAGE}
+                className="w-full rounded-md border border-line bg-paper px-3 py-2 text-sm outline-none focus:border-accent"
+              />
+            </label>
+            <p className="text-sm leading-6 text-muted">
+              Leave it blank to use the default. This is not shown as a failure.
+            </p>
+            <SubmitButton label="Save handoff message" pendingLabel="Saving…" />
+          </form>
+        ) : (
+          <p className="text-sm leading-6">{handoffMessage}</p>
         )}
       </section>
 

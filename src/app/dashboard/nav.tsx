@@ -13,26 +13,39 @@ const items = [
   { href: "/dashboard/settings", label: "Settings" },
 ];
 
-export function DashboardNav() {
+export function DashboardNav({ handoffCount }: { handoffCount: number }) {
   const pathname = usePathname();
 
   return (
-    <nav aria-label="Workspace" className="flex gap-1 overflow-x-auto md:flex-col">
+    <nav
+      aria-label="Workspace"
+      data-open-handoffs={handoffCount}
+      className="flex gap-1 overflow-x-auto md:flex-col"
+    >
       {items.map((item) => {
         const active =
           pathname === item.href || pathname.startsWith(`${item.href}/`);
+        const badge = item.href === "/dashboard/handoffs" && handoffCount > 0;
         return (
           <Link
             key={item.href}
             href={item.href}
             aria-current={active ? "page" : undefined}
-            className={`rounded-md px-3 py-2 text-sm whitespace-nowrap ${
+            className={`flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm whitespace-nowrap ${
               active
                 ? "bg-sidebar-active text-accent-ink"
                 : "text-sidebar-muted hover:bg-sidebar-active hover:text-accent-ink"
             }`}
           >
-            {item.label}
+            <span>{item.label}</span>
+            {badge ? (
+              <span
+                className="rounded-full bg-accent px-1.5 py-0.5 text-xs font-medium text-accent-ink"
+                aria-label={`${handoffCount} open`}
+              >
+                {handoffCount}
+              </span>
+            ) : null}
           </Link>
         );
       })}

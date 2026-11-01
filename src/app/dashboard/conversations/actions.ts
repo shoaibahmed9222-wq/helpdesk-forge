@@ -10,9 +10,9 @@ export async function sendDraft(formData: FormData) {
   const { workspace } = await requireWorkspace();
   const messageId = String(formData.get("messageId") ?? "");
   const result = await sendStoredDraft(workspace.id, messageId);
-  if (result === "missing") redirect("/dashboard/conversations?error=draft");
-  if (result === "failed") redirect("/dashboard/conversations?error=send");
-  revalidatePath("/dashboard/conversations");
-  revalidatePath("/dashboard/handoffs");
-  redirect("/dashboard/conversations?sent=1");
+  revalidatePath("/dashboard", "layout");
+  if (result.status === "missing") redirect("/dashboard/conversations?error=draft");
+  const conversationId = result.conversationId;
+  if (result.status === "failed") redirect(`/dashboard/conversations/${conversationId}?error=send`);
+  redirect(`/dashboard/conversations/${conversationId}?sent=1`);
 }

@@ -68,7 +68,7 @@ export function AgentChat({ devMode }: { devMode: boolean }) {
                         : "border border-line text-ink"
                     }`}
                   >
-                    {confident ? "Confident" : "Unsure"}
+                    {confident ? "Confident" : "AI unsure"}
                   </p>
                   {devAnswer ? (
                     <p className="text-xs font-medium text-muted">Dev provider. Not an LLM.</p>

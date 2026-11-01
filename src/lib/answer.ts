@@ -2,11 +2,12 @@ import "server-only";
 
 import {
   AnswerError,
-  UNSURE_ANSWER,
   type Answer,
   type AnswerCitation,
   type AnswerTurn,
 } from "@/lib/answer-types";
+import { declinesToCustomer } from "@/lib/handoff-copy";
+import { getHandoffMessage } from "@/lib/handoff-message";
 import { searchKnowledge, type KnowledgePassage } from "@/lib/knowledge";
 import { completeChat, passagePrompt, type LlmMessage } from "@/lib/llm";
 import { resolveLlm } from "@/lib/llm-config";
@@ -25,9 +26,10 @@ Reply with one JSON object and no other text:
 
 confidence is "confident" or "unsure".
 citations lists the n values of passages that support the answer.
-If the passages do not contain the answer, set confidence to "unsure", citations to [], and answer to exactly: ${UNSURE_ANSWER}
-Do not state policies, prices, dates, or steps that are not written in the passages.
-A confident answer cites at least one passage.`;
+If the passages do not contain the answer, set confidence to "unsure", citations to [], and answer to an empty string.
+A confident answer cites at least one passage and states only what that passage says, in your own short words.
+Never tell the customer that you do not know, that you lack information, or that something is missing. Never mention docs, documentation, a knowledge base, or passages in the answer. The reason is internal and is not shown to the customer.
+Do not state policies, prices, dates, or steps that are not written in the passages.`;
 
 function cleanReason(value: unknown, fallback: string) {
   if (typeof value !== "string") return fallback;
@@ -66,7 +68,7 @@ function extractJson(raw: string) {
 
 function unsure(reason: string, provider: Answer["provider"]): Answer {
   return {
-    answer: UNSURE_ANSWER,
+    answer: "",
     confidence: "unsure",
     reason,
     citations: [],
@@ -79,9 +81,9 @@ function interpret(raw: string, passages: KnowledgePassage[], provider: Answer["
   if (!parsed || (parsed.confidence !== "confident" && parsed.confidence !== "unsure")) {
     return unsure("The model reply could not be read.", provider);
   }
-  if (parsed.confidence === "unsure") {
+  if (parsed.confidence === "unsure" || declinesToCustomer(typeof parsed.answer === "string" ? parsed.answer : "")) {
     return unsure(
-      cleanReason(parsed.reason, "The docs don't cover that question."),
+      cleanReason(parsed.reason, "The passages do not answer the question."),
       provider,
     );
   }
@@ -102,7 +104,7 @@ function interpret(raw: string, passages: KnowledgePassage[], provider: Answer["
     });
   }
   const answer = typeof parsed.answer === "string" ? parsed.answer.trim().slice(0, 4000) : "";
-  if (!answer || answer === UNSURE_ANSWER || citations.length === 0) {
+  if (!answer || citations.length === 0 || declinesToCustomer(answer)) {
     return unsure(
       cleanReason(parsed.reason, "The model did not cite a passage from this workspace."),
       provider,
@@ -130,7 +132,7 @@ export async function answerQuestion(input: {
   const found = await searchKnowledge(input.workspaceId, question);
   const passages = found.filter((passage) => passage.similarity >= RELEVANCE_MIN);
   if (passages.length === 0) {
-    return unsure("No passage in this workspace is relevant to the question.", null);
+    return present(input.workspaceId, unsure("No passage in this workspace is relevant to the question.", null));
   }
 
   const llm = await resolveLlm(input.workspaceId);
@@ -159,5 +161,10 @@ export async function answerQuestion(input: {
     messages,
   });
 
-  return interpret(raw, passages, llm.provider);
+  return present(input.workspaceId, interpret(raw, passages, llm.provider));
+}
+
+async function present(workspaceId: string, answer: Answer): Promise<Answer> {
+  if (answer.confidence === "confident") return answer;
+  return { ...answer, answer: await getHandoffMessage(workspaceId) };
 }

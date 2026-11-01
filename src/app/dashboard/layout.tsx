@@ -1,4 +1,5 @@
 import { signOut } from "@/auth";
+import { countOpenHandoffs } from "@/lib/inbox";
 import { requireWorkspace } from "@/lib/workspace";
 
 import { DashboardNav } from "./nav";
@@ -7,6 +8,7 @@ export default async function DashboardLayout({
   children,
 }: LayoutProps<"/dashboard">) {
   const { user, workspace, role } = await requireWorkspace();
+  const handoffCount = await countOpenHandoffs(workspace.id);
   const roleLabel = role === "owner" ? "Owner" : role;
 
   return (
@@ -21,7 +23,7 @@ export default async function DashboardLayout({
           <p className="text-xs text-sidebar-muted">{roleLabel}</p>
         </div>
         <div className="mt-6">
-          <DashboardNav />
+          <DashboardNav handoffCount={handoffCount} />
         </div>
         <div className="mt-6 border-t border-white/10 pt-4">
           <p className="truncate text-xs text-sidebar-muted">{user.email}</p>

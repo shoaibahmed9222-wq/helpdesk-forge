@@ -96,6 +96,8 @@ export const workspaces = pgTable("workspace", {
   widgetAccent: text("widget_accent"),
   // Newline-separated hostnames. Empty means any site may embed the chat.
   widgetAllowedDomains: text("widget_allowed_domains"),
+  // Empty means the default customer handoff line. Never shown with a refusal.
+  handoffMessage: text("handoff_message"),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
 });
 
@@ -185,8 +187,10 @@ export const conversations = pgTable(
     visitorSessionId: text("visitor_session_id"),
     subject: text("subject").notNull(),
     customerEmail: text("customer_email").notNull(),
+    // answered: the agent replied. draft: a reply is waiting to be sent.
+    // handoff: a person needs to take it. resolved: a person closed a handoff.
     status: text("status")
-      .$type<"open" | "answered" | "draft" | "handoff">()
+      .$type<"open" | "answered" | "draft" | "handoff" | "resolved">()
       .notNull(),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
@@ -211,8 +215,10 @@ export const messages = pgTable(
     workspaceId: text("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
-    role: text("role").$type<"customer" | "assistant">().notNull(),
+    role: text("role").$type<"customer" | "assistant" | "human">().notNull(),
     body: text("body").notNull(),
+    // Set on agent replies only. The widget and outbound email never include it.
+    confidence: text("confidence").$type<"confident" | "unsure">(),
     // RFC Message-ID, with brackets. Unique across mail we receive and mail we send.
     emailMessageId: text("email_message_id").unique(),
     inReplyTo: text("in_reply_to"),

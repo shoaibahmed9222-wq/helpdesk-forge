@@ -25,8 +25,8 @@ export async function sendReplyEmail(input: {
   subject: string;
   text: string;
   messageId: string;
-  inReplyTo: string;
-  references: string[];
+  inReplyTo?: string | null;
+  references?: string[];
 }) {
   const host = process.env.SMTP_HOST?.trim() ?? "";
   const port = Number(process.env.SMTP_PORT || "587");
@@ -50,8 +50,11 @@ export async function sendReplyEmail(input: {
       subject: input.subject,
       text: input.text,
       messageId: input.messageId,
-      inReplyTo: input.inReplyTo,
-      references: input.references.join(" "),
+      inReplyTo: input.inReplyTo || undefined,
+      references:
+        input.references && input.references.length > 0
+          ? input.references.join(" ")
+          : undefined,
     });
   } catch {
     throw new Error("smtp_failed");

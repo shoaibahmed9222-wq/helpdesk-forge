@@ -38,7 +38,7 @@ function overlap(question: string, passage: string) {
 
 function devUnsure(reason: string) {
   return JSON.stringify({
-    answer: "I don't know. The docs don't cover that.",
+    answer: "",
     confidence: "unsure",
     reason,
     citations: [],

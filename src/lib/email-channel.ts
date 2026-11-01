@@ -23,25 +23,6 @@ import {
 
 export type EmailCitation = { chunkId: string; title: string };
 
-export type EmailThreadMessage = {
-  id: string;
-  role: "customer" | "assistant";
-  body: string;
-  delivery: "received" | "sent" | "draft" | "handoff";
-  citations: EmailCitation[];
-  createdAt: Date;
-};
-
-export type EmailThread = {
-  id: string;
-  channel: "email" | "widget";
-  subject: string;
-  customerEmail: string;
-  status: "open" | "answered" | "draft" | "handoff";
-  updatedAt: Date;
-  messages: EmailThreadMessage[];
-};
-
 type WorkspaceHit = {
   id: string;
   name: string;
@@ -112,61 +93,6 @@ export function webhookAuthorized(header: string | null) {
   return sameSecret(decoded.slice(colon + 1), secret);
 }
 
-export async function listEmailThreads(workspaceId: string, status?: EmailThread["status"]) {
-  const rows = await db
-    .select({
-      conversationId: conversations.id,
-      channel: conversations.channel,
-      subject: conversations.subject,
-      customerEmail: conversations.customerEmail,
-      status: conversations.status,
-      updatedAt: conversations.updatedAt,
-      messageId: messages.id,
-      role: messages.role,
-      body: messages.body,
-      delivery: messages.delivery,
-      citations: messages.citations,
-      createdAt: messages.createdAt,
-    })
-    .from(conversations)
-    .innerJoin(messages, eq(messages.conversationId, conversations.id))
-    .where(
-      and(
-        eq(conversations.workspaceId, workspaceId),
-        eq(messages.workspaceId, workspaceId),
-        status ? eq(conversations.status, status) : undefined,
-      ),
-    )
-    .orderBy(asc(conversations.updatedAt), asc(messages.createdAt));
-
-  const threads = new Map<string, EmailThread>();
-  for (const row of rows) {
-    let thread = threads.get(row.conversationId);
-    if (!thread) {
-      thread = {
-        id: row.conversationId,
-        channel: row.channel,
-        subject: row.subject,
-        customerEmail: row.customerEmail,
-        status: row.status,
-        updatedAt: row.updatedAt,
-        messages: [],
-      };
-      threads.set(row.conversationId, thread);
-    }
-    thread.messages.push({
-      id: row.messageId,
-      role: row.role,
-      body: row.body,
-      delivery: row.delivery,
-      citations: parseCitations(row.citations),
-      createdAt: row.createdAt,
-    });
-  }
-
-  return [...threads.values()].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
-}
-
 export async function acceptInbound(raw: unknown) {
   if (!inboundDomain()) return { status: 503, body: { error: "unconfigured" } };
 
@@ -229,9 +155,9 @@ export async function sendStoredDraft(workspaceId: string, messageId: string) {
       ),
     )
     .limit(1);
-  if (!row?.inReplyTo) return "missing" as const;
+  if (!row?.inReplyTo) return { status: "missing" as const };
 
-  const citations = parseCitations(row.citations);
+  const citations = parseStoredCitations(row.citations);
   const references = splitIds(row.referencesHeader);
   const outboundId = newMessageId();
   const claimed = await db
@@ -239,7 +165,7 @@ export async function sendStoredDraft(workspaceId: string, messageId: string) {
     .set({ delivery: "sent", emailMessageId: outboundId })
     .where(and(eq(messages.id, row.id), eq(messages.workspaceId, workspaceId), eq(messages.delivery, "draft")))
     .returning({ id: messages.id });
-  if (claimed.length === 0) return "missing" as const;
+  if (claimed.length === 0) return { status: "missing" as const };
 
   try {
     await deliver({
@@ -258,7 +184,7 @@ export async function sendStoredDraft(workspaceId: string, messageId: string) {
       .update(messages)
       .set({ delivery: "draft", emailMessageId: null })
       .where(eq(messages.id, row.id));
-    return "failed" as const;
+    return { status: "failed" as const, conversationId: row.conversationId };
   }
 
   await db
@@ -267,7 +193,7 @@ export async function sendStoredDraft(workspaceId: string, messageId: string) {
     .where(
       and(eq(conversations.id, row.conversationId), eq(conversations.workspaceId, workspaceId)),
     );
-  return "sent" as const;
+  return { status: "sent" as const, conversationId: row.conversationId };
 }
 
 function newMessageId() {
@@ -286,7 +212,7 @@ function splitIds(value: string | null) {
     .filter((id): id is string => Boolean(id));
 }
 
-function parseCitations(value: string | null): EmailCitation[] {
+export function parseStoredCitations(value: string | null): EmailCitation[] {
   if (!value) return [];
   try {
     const parsed = JSON.parse(value) as unknown;
@@ -449,7 +375,7 @@ async function claimInbound(
         if (item.id === row.id) continue;
         if (item.role === "customer" && item.delivery === "received") {
           turns.push({ role: "user", content: item.body });
-        } else if (item.role === "assistant" && item.delivery === "sent") {
+        } else if (item.role === "human" || (item.role === "assistant" && item.delivery === "sent")) {
           turns.push({ role: "assistant", content: item.body });
         }
       }
@@ -495,6 +421,7 @@ async function finishInbound(
       conversationId,
       body: answer.answer,
       delivery: "handoff",
+      confidence: answer.confidence,
       citations,
       inReplyTo: mail.messageId,
       references,
@@ -510,6 +437,7 @@ async function finishInbound(
       conversationId,
       body: answer.answer,
       delivery: "draft",
+      confidence: answer.confidence,
       citations,
       inReplyTo: mail.messageId,
       references,
@@ -539,6 +467,7 @@ async function finishInbound(
       conversationId,
       body: answer.answer,
       delivery: "draft",
+      confidence: answer.confidence,
       citations,
       inReplyTo: mail.messageId,
       references,
@@ -553,6 +482,7 @@ async function finishInbound(
     conversationId,
     body: answer.answer,
     delivery: "sent",
+    confidence: answer.confidence,
     citations,
     inReplyTo: mail.messageId,
     references,
@@ -591,6 +521,7 @@ async function storeAssistant(input: {
   conversationId: string;
   body: string;
   delivery: "sent" | "draft" | "handoff";
+  confidence: "confident" | "unsure";
   citations: EmailCitation[];
   inReplyTo: string;
   references: string[];
@@ -606,6 +537,7 @@ async function storeAssistant(input: {
     inReplyTo: input.inReplyTo,
     referencesHeader: joinIds(input.references),
     delivery: input.delivery,
+    confidence: input.confidence,
     citations: JSON.stringify(input.citations),
   });
   await db

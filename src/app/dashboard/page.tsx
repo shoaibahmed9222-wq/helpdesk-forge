@@ -35,7 +35,7 @@ export default async function DashboardPage() {
           <Link href="/dashboard/handoffs" className="text-accent underline-offset-2 hover:underline">
             Handoffs
           </Link>
-          . Change this in{" "}
+          , where a person can reply. Change this in{" "}
           <Link href="/dashboard/settings" className="text-accent underline-offset-2 hover:underline">
             Settings
           </Link>

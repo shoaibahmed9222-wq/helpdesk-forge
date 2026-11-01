@@ -56,7 +56,7 @@ Workspace owners add `.md`, `.txt`, or `.pdf` files, or paste text, on **Knowled
 
 It retrieves that workspace's passages, asks the model to answer only from those passages, and returns the answer, citations, and a `confident` or `unsure` signal with a reason. A citation is the document title plus the passage id and its position (`chunk.position`, starting at 0).
 
-Passages below a cosine similarity of 0.4 are ignored. If nothing relevant remains, or the model says the passages do not cover the question, the answer is exactly `I don't know. The docs don't cover that.` A guessed policy is not returned.
+Passages below a cosine similarity of 0.4 are ignored. If nothing relevant remains, or the model declines, or its answer says it does not know or mentions docs, documentation, or a knowledge base, the result is `unsure`. The customer then sees the workspace handoff message, not an internal refusal. A guessed policy is not returned. The default handoff message is “Good question! I'm passing this to our team so they can get you the right answer. They'll reply here soon.” An owner can change it on **Settings**. The dashboard still labels that reply **AI unsure**.
 
 ### Ask API
 
@@ -83,7 +83,7 @@ The key is encrypted with AES-256-GCM before it is written to `workspace.llm_api
 
 In development, when there is no workspace key and no hosted key, a dev provider quotes a passage only when most of the question's words appear in it. Otherwise it returns unsure. It is labelled in the dashboard and in the answer reason. It is not an LLM. Production returns an error instead of using it.
 
-**Test your agent** shows the answer, the confident or unsure flag, the reason, and citations. A citation opens the source passage.
+**Test your agent** shows the answer, the confident or AI unsure flag, the reason, and citations. A citation opens the source passage. The reason stays in the dashboard.
 
 ## Email
 
@@ -94,7 +94,7 @@ On **Settings**, the owner chooses:
 - **Auto-reply when confident** — a covered question is sent immediately.
 - **Draft only** — the reply is saved on **Conversations** until someone clicks **Send reply**.
 
-If the docs do not cover the question, nothing is sent in either mode. The thread is listed under **Handoffs**. The email never includes the confidence flag or the internal reason. Doc titles are added in a short footer.
+If the agent cannot answer, nothing is sent in either mode. The thread is listed under **Handoffs**, and the saved reply is the handoff message. The email never includes the confidence flag or the internal reason. Doc titles are added in a short footer when a confident reply is sent. A person replies from **Handoffs** on the same thread.
 
 The inbound webhook is `POST /api/email/inbound`. It accepts [Postmark's inbound JSON](https://postmarkapp.com/developer/webhooks/inbound-webhook). Authenticate with the shared secret:
 
@@ -119,7 +119,7 @@ The script address is this app. `data-key` is the workspace public key from that
 
 The bubble is isolated from the host page with a shadow root. Visitors see the title, greeting, and color saved on **Website chat**. A returning visitor keeps the same chat: the browser stores an anonymous session id in `localStorage`, and the server stores the thread in the same `conversation` and `message` tables as email, with `channel` set to `widget`.
 
-A covered question shows the answer and the source titles. An uncovered question shows exactly `I don't know. The docs don't cover that.` and asks for an email, which is optional. That thread is listed under **Handoffs**. This slice does not send any email.
+A covered question shows the answer and the source titles. An uncovered question shows the handoff message, then “Leave your email and we'll get back to you.” The email is optional. That thread is listed under **Handoffs**. While the chat is open it checks for new replies. A reply from a person is labeled **Team**. If the visitor left an email, that reply is emailed to them as well.
 
 **Allowed sites** is empty by default, so any site can load the chat. Add one domain per line to reject other origins. The app's own origin is always allowed, so the preview keeps working. Requests are limited per public key and IP address (20 per minute, or `WIDGET_RATE_LIMIT`). Messages longer than 2000 characters are rejected.
 
@@ -133,6 +133,20 @@ POST /api/widget/handoff?key=pk_...
 ```
 
 Those routes send CORS headers. A disallowed `Origin` gets `403` and no answer. The chat route calls `answerQuestion` for that workspace only.
+
+## Conversations
+
+**Conversations** lists email and website chat for this workspace, newest first. Filter by channel and by status: answered by the agent, needs a person, draft, or resolved. Search matches the customer’s email or the text they sent. The list is paged. Open a conversation for the full thread, citations, and an internal confident or AI unsure label. That label is not included in email or in the website chat.
+
+## Handoffs
+
+**Handoffs** lists conversations a person needs to take, open ones first, then resolved ones. Each card shows the customer’s email (or that they did not leave one), their question, and what the agent said. A person can reply, mark it resolved, or reopen it. The nav shows how many are still open.
+
+An email reply goes out on the same thread. A website-chat reply appears in the widget, labeled Team, the next time the chat is open. If that visitor left an email, the same reply is emailed to them.
+
+## Analytics
+
+**Analytics** is for this workspace only, for the last 7 or 30 days. It shows how many conversations started, split by email and website chat, how many the agent answered without a handoff, how many were handed to a person, the median time from the handoff to the first team reply, the questions a person had to take (grouped by simplified text), and the docs cited most often. The chart is drawn in the page. No outside analytics service is used.
 
 ## Embeddings
 

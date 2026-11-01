@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { setReplyMode } from "@/lib/email-channel";
+import { setHandoffMessage } from "@/lib/handoff-message";
 import { clearWorkspaceLlm, saveWorkspaceLlm } from "@/lib/llm-config";
 import { requireWorkspace } from "@/lib/workspace";
 
@@ -46,6 +47,15 @@ export async function saveEmailReplyMode(formData: FormData) {
     redirect("/dashboard/settings?error=reply");
   }
   await setReplyMode(workspace.id, mode);
+  refresh();
+  redirect("/dashboard/settings");
+}
+
+export async function saveHandoffMessage(formData: FormData) {
+  const { workspace } = await requireOwner();
+  const result = await setHandoffMessage(workspace.id, String(formData.get("handoffMessage") ?? ""));
+  if (result === "long") redirect("/dashboard/settings?error=handoff");
+  if (result === "unsafe") redirect("/dashboard/settings?error=handoff-copy");
   refresh();
   redirect("/dashboard/settings");
 }

@@ -1,5 +1,3 @@
-export const UNSURE_ANSWER = "I don't know. The docs don't cover that.";
-
 export type AnswerTurn = {
   role: "user" | "assistant";
   content: string;

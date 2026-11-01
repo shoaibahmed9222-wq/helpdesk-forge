@@ -5,7 +5,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { conversations, messages, workspaces } from "@/db/schema";
 import { answerQuestion } from "@/lib/answer";
-import { AnswerError, UNSURE_ANSWER, type AnswerTurn } from "@/lib/answer-types";
+import { AnswerError, type AnswerTurn } from "@/lib/answer-types";
 
 export const WIDGET_DEFAULT_TITLE = "Chat with us";
 export const WIDGET_DEFAULT_GREETING =
@@ -159,12 +159,17 @@ export async function widgetTranscript(workspaceId: string, sessionId: string) {
 
   return {
     emailProvided: conversation.customerEmail.length > 0,
-    messages: rows.map((row) => ({
-      role: row.role,
-      body: row.body,
-      handoff: row.delivery === "handoff",
-      citations: row.role === "assistant" ? citationTitles(row.citations) : [],
-    })),
+    messages: rows.flatMap((row) => {
+      if (row.role !== "customer" && row.role !== "assistant" && row.role !== "human") return [];
+      return [
+        {
+          role: row.role,
+          body: row.body,
+          handoff: row.delivery === "handoff",
+          citations: row.role === "assistant" ? citationTitles(row.citations) : [],
+        },
+      ];
+    }),
   };
 }
 
@@ -200,7 +205,7 @@ export async function askWidget(input: {
     title: citation.title,
   }));
   const now = new Date();
-  const body = handoff ? UNSURE_ANSWER : answer.answer;
+  const body = answer.answer;
 
   await db.transaction(async (tx) => {
     await tx.insert(messages).values({
@@ -217,6 +222,7 @@ export async function askWidget(input: {
       role: "assistant",
       body,
       delivery: handoff ? "handoff" : "sent",
+      confidence: answer.confidence,
       citations: JSON.stringify(citations),
       createdAt: new Date(now.getTime() + 1),
     });
@@ -348,7 +354,9 @@ async function priorTurns(conversationId: string, workspaceId: string) {
   const turns: AnswerTurn[] = [];
   for (const row of rows) {
     if (row.role === "customer") turns.push({ role: "user", content: row.body });
-    else if (row.role === "assistant") turns.push({ role: "assistant", content: row.body });
+    else if (row.role === "assistant" || row.role === "human") {
+      turns.push({ role: "assistant", content: row.body });
+    }
   }
   return turns;
 }

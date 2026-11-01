@@ -82,6 +82,12 @@ export const workspaces = pgTable("workspace", {
   llmBaseUrl: text("llm_base_url"),
   // AES-256-GCM ciphertext. The plaintext key is never sent to the client.
   llmApiKey: text("llm_api_key"),
+  // auto sends a confident reply. draft saves it for a person to send.
+  // An unsure answer is never sent in either mode.
+  emailReplyMode: text("email_reply_mode")
+    .$type<"auto" | "draft">()
+    .notNull()
+    .default("draft"),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
 });
 
@@ -150,5 +156,58 @@ export const chunks = pgTable(
       "hnsw",
       chunk.embedding.op("vector_cosine_ops"),
     ),
+  ],
+);
+
+export const conversations = pgTable(
+  "conversation",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    subject: text("subject").notNull(),
+    customerEmail: text("customer_email").notNull(),
+    status: text("status")
+      .$type<"open" | "answered" | "draft" | "handoff">()
+      .notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (conversation) => [
+    index("conversation_workspace_id_idx").on(conversation.workspaceId),
+  ],
+);
+
+export const messages = pgTable(
+  "message",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    conversationId: text("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    role: text("role").$type<"customer" | "assistant">().notNull(),
+    body: text("body").notNull(),
+    // RFC Message-ID, with brackets. Unique across mail we receive and mail we send.
+    emailMessageId: text("email_message_id").unique(),
+    inReplyTo: text("in_reply_to"),
+    referencesHeader: text("references_header"),
+    delivery: text("delivery")
+      .$type<"received" | "sent" | "draft" | "handoff">()
+      .notNull(),
+    // JSON [{ chunkId, title }]. Titles are the only citation data that goes out by email.
+    citations: text("citations"),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (message) => [
+    index("message_conversation_id_idx").on(message.conversationId),
+    index("message_workspace_id_idx").on(message.workspaceId),
   ],
 );

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { setReplyMode } from "@/lib/email-channel";
 import { clearWorkspaceLlm, saveWorkspaceLlm } from "@/lib/llm-config";
 import { requireWorkspace } from "@/lib/workspace";
 
@@ -33,8 +34,20 @@ async function requireOwner() {
 }
 
 function refresh() {
+  revalidatePath("/dashboard");
   revalidatePath("/dashboard/settings");
   revalidatePath("/dashboard/test");
+}
+
+export async function saveEmailReplyMode(formData: FormData) {
+  const { workspace } = await requireOwner();
+  const mode = String(formData.get("replyMode") ?? "");
+  if (mode !== "auto" && mode !== "draft") {
+    redirect("/dashboard/settings?error=reply");
+  }
+  await setReplyMode(workspace.id, mode);
+  refresh();
+  redirect("/dashboard/settings");
 }
 
 export async function saveLlmSettings(formData: FormData) {

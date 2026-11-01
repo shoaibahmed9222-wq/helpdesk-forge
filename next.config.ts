@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["pg", "unpdf", "@huggingface/transformers"],
+  serverExternalPackages: ["pg", "unpdf", "@huggingface/transformers", "nodemailer"],
   experimental: {
     serverActions: {
       bodySizeLimit: "10mb",

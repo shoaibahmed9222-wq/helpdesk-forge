@@ -58,6 +58,16 @@ export default async function WidgetPage({
 
       {error ? <p className="text-sm text-red-800">{error}</p> : null}
 
+      {!settings.allowedDomains.trim() ? (
+        <p
+          className="rounded-md border border-red-800/40 bg-card px-3 py-2 text-sm leading-6 text-red-800"
+          role="status"
+        >
+          <span className="font-medium">Warning: allowed sites is empty.</span> Any website can
+          load this chat. Add your domain before you go live.
+        </p>
+      ) : null}
+
       <section className="space-y-3 rounded-lg border border-line bg-card p-5">
         <h2 className="text-sm font-medium">Install</h2>
         <p className="text-sm leading-6 text-muted">
@@ -144,8 +154,8 @@ export default async function WidgetPage({
                 className="w-full rounded-md border border-line bg-paper px-3 py-2 text-sm outline-none focus:border-accent"
               />
               <p className="text-sm leading-6 text-muted">
-                Leave this empty to allow the chat on any site. Add one domain
-                per line when you want to limit where it runs.
+                One domain per line, such as example.com. The app&apos;s own
+                address is always allowed. An empty list allows every site.
               </p>
             </div>
             <SubmitButton label="Save" pendingLabel="Saving…" />

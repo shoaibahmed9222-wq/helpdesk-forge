@@ -2,6 +2,7 @@ import type { AdapterAccountType } from "@auth/core/adapters";
 import { sql } from "drizzle-orm";
 import {
   index,
+  bigint,
   integer,
   pgTable,
   primaryKey,
@@ -235,3 +236,10 @@ export const messages = pgTable(
     index("message_workspace_id_idx").on(message.workspaceId),
   ],
 );
+
+// Fixed one-minute windows for the website chat. Shared by every app instance.
+export const widgetRateBuckets = pgTable("widget_rate_bucket", {
+  bucketKey: text("bucket_key").primaryKey(),
+  windowStart: bigint("window_start", { mode: "number" }).notNull(),
+  count: integer("count").notNull(),
+});

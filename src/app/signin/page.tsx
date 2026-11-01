@@ -1,6 +1,7 @@
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 
 import { signIn } from "@/auth";
+import { productionIssues } from "@/lib/production-config";
 
 function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -36,7 +37,19 @@ export default async function SignInPage({
             if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
               redirect("/signin?error=email");
             }
-            await signIn("nodemailer", { email, redirectTo: "/" });
+            const smtp = productionIssues().filter(
+              (issue) => issue.code === "smtp" || issue.code === "email_from",
+            );
+            if (smtp.length > 0) {
+              redirect("/signin?error=smtp");
+            }
+            try {
+              await signIn("nodemailer", { email, redirectTo: "/" });
+            } catch (error) {
+              unstable_rethrow(error);
+              console.error("sign-in email failed");
+              redirect("/signin?error=delivery");
+            }
           }}
         >
           <div className="space-y-2">
@@ -55,6 +68,14 @@ export default async function SignInPage({
           </div>
           {error === "email" ? (
             <p className="text-sm text-red-800">Enter a valid email address.</p>
+          ) : error === "smtp" ? (
+            <p className="text-sm text-red-800">
+              Sign-in email is not configured. Set SMTP_HOST, SMTP_PORT, and EMAIL_FROM.
+            </p>
+          ) : error === "delivery" ? (
+            <p className="text-sm text-red-800">
+              The sign-in email could not be sent. Check SMTP_HOST, SMTP_PORT, and EMAIL_FROM.
+            </p>
           ) : error ? (
             <p className="text-sm text-red-800">
               That sign-in link did not work. Request a new one.
@@ -68,8 +89,9 @@ export default async function SignInPage({
           </button>
         </form>
         <p className="mt-6 text-xs leading-5 text-muted">
-          In local development the link is printed in the server console. No
-          email is sent.
+          {process.env.NODE_ENV === "production"
+            ? "We email you a sign-in link. It expires after 24 hours."
+            : "In local development the link is printed in the server console. No email is sent."}
         </p>
       </div>
     </main>

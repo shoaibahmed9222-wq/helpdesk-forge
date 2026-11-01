@@ -4,9 +4,12 @@ import os from "node:os";
 import path from "node:path";
 
 import { EMBEDDING_DIMENSIONS } from "@/db/embedding";
+import {
+  embeddingDimensionError,
+  resolveEmbeddings,
+} from "@/lib/production-config";
 
 const LOCAL_MODEL = "Xenova/all-MiniLM-L6-v2";
-const OPENAI_MODEL = "text-embedding-3-small";
 const BATCH_SIZE = 32;
 
 type FeatureExtractor = (
@@ -32,23 +35,10 @@ function enqueue<T>(task: () => Promise<T>) {
   return result;
 }
 
-function embeddingProvider() {
-  const value =
-    (process.env.EMBEDDING_PROVIDER ?? "local").trim().toLowerCase() || "local";
-  if (value !== "local" && value !== "openai") {
-    throw new Error(
-      `Unknown EMBEDDING_PROVIDER "${value}". Use local or openai.`,
-    );
-  }
-  return value;
-}
-
 function assertDimensions(vectors: number[][]) {
   for (const vector of vectors) {
     if (vector.length !== EMBEDDING_DIMENSIONS) {
-      throw new Error(
-        `Expected ${EMBEDDING_DIMENSIONS}-dimensional embeddings, got ${vector.length}.`,
-      );
+      throw new Error(embeddingDimensionError(vector.length, EMBEDDING_DIMENSIONS));
     }
   }
   return vectors;
@@ -76,6 +66,12 @@ async function localExtractor() {
 }
 
 async function embedLocal(texts: string[]) {
+  // Production startup already refuses this. The guard stops a cold start from downloading weights.
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "Production does not use the local embedding model. Set EMBEDDING_PROVIDER to openai or compatible.",
+    );
+  }
   return enqueue(async () => {
     const extractor = await localExtractor();
     const output = await extractor(texts, {
@@ -86,45 +82,47 @@ async function embedLocal(texts: string[]) {
   });
 }
 
-async function embedOpenAI(texts: string[]) {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) {
-    throw new Error(
-      "OPENAI_API_KEY is required when EMBEDDING_PROVIDER=openai.",
-    );
+async function embedHosted(texts: string[]) {
+  const resolved = resolveEmbeddings();
+  if ("error" in resolved || resolved.mode !== "hosted") {
+    throw new Error("error" in resolved ? resolved.error : "Hosted embeddings are not configured.");
   }
 
-  const response = await fetch("https://api.openai.com/v1/embeddings", {
+  const payload: { model: string; input: string[]; dimensions?: number } = {
+    model: resolved.model,
+    input: texts,
+  };
+  if (resolved.sendDimensions) payload.dimensions = EMBEDDING_DIMENSIONS;
+
+  const response = await fetch(`${resolved.baseUrl}/embeddings`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${key}`,
+      Authorization: `Bearer ${resolved.apiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      model: OPENAI_MODEL,
-      input: texts,
-      dimensions: EMBEDDING_DIMENSIONS,
-    }),
+    body: JSON.stringify(payload),
   });
   if (!response.ok) {
-    throw new Error(`OpenAI embeddings failed (${response.status}).`);
+    throw new Error(`Embeddings request failed (${response.status}).`);
   }
 
   const body = (await response.json()) as {
-    data: { index: number; embedding: number[] }[];
+    data?: { index?: number; embedding?: number[] }[];
   };
-  const vectors = body.data
-    .sort((a, b) => a.index - b.index)
-    .map((row) => row.embedding);
+  const vectors = [...(body.data ?? [])]
+    .sort((a, b) => (a.index ?? 0) - (b.index ?? 0))
+    .map((row) => row.embedding ?? []);
   if (vectors.length !== texts.length) {
-    throw new Error("OpenAI returned a different number of embeddings.");
+    throw new Error("The embeddings endpoint returned a different number of vectors.");
   }
   return assertDimensions(vectors);
 }
 
 export async function embedTexts(texts: string[]) {
   if (texts.length === 0) return [];
-  const embed = embeddingProvider() === "openai" ? embedOpenAI : embedLocal;
+  const resolved = resolveEmbeddings();
+  if ("error" in resolved) throw new Error(resolved.error);
+  const embed = resolved.mode === "hosted" ? embedHosted : embedLocal;
   const vectors: number[][] = [];
   for (let index = 0; index < texts.length; index += BATCH_SIZE) {
     vectors.push(...(await embed(texts.slice(index, index + BATCH_SIZE))));

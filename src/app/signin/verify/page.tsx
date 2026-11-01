@@ -1,3 +1,5 @@
+const production = process.env.NODE_ENV === "production";
+
 export default function VerifyPage() {
   return (
     <main className="flex min-h-full items-center justify-center px-6 py-16">
@@ -6,11 +8,12 @@ export default function VerifyPage() {
           Helpdesk Forge
         </p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight">
-          Check the server console
+          {production ? "Check your email" : "Check the server console"}
         </h1>
         <p className="mt-3 text-sm leading-6 text-muted">
-          Your sign-in link was printed next to the process running the app.
-          Open it in this browser to continue.
+          {production
+            ? "Your sign-in link was emailed to you. Open it in this browser to continue."
+            : "Your sign-in link was printed next to the process running the app. Open it in this browser to continue."}
         </p>
       </div>
     </main>

@@ -1,21 +1,10 @@
 import "server-only";
 
+import { sql } from "drizzle-orm";
+
+import { db } from "@/db";
+import { rateBucketKey, rateLimitMax, rateWindowStart, RATE_WINDOW_MS } from "@/lib/rate-limit";
 import { allowedDomainList, widgetWorkspace, type WidgetWorkspace } from "@/lib/widget";
-
-const WINDOW_MS = 60_000;
-
-type Bucket = { start: number; count: number };
-
-function buckets() {
-  const host = globalThis as typeof globalThis & { __hfWidgetRates?: Map<string, Bucket> };
-  return (host.__hfWidgetRates ??= new Map());
-}
-
-function rateLimitMax() {
-  const parsed = Number(process.env.WIDGET_RATE_LIMIT);
-  if (Number.isInteger(parsed) && parsed >= 1 && parsed <= 1000) return parsed;
-  return 20;
-}
 
 export function clientIp(request: Request) {
   const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
@@ -25,22 +14,29 @@ export function clientIp(request: Request) {
   return "unknown";
 }
 
-export function takeRateLimit(publicKey: string, ip: string) {
-  const now = Date.now();
-  const store = buckets();
-  const id = `${publicKey} ${ip}`;
-  let bucket = store.get(id);
-  if (!bucket || now - bucket.start >= WINDOW_MS) {
-    bucket = { start: now, count: 0 };
-    store.set(id, bucket);
+export async function takeRateLimit(publicKey: string, ip: string, now = Date.now()) {
+  const start = rateWindowStart(now);
+  const key = rateBucketKey(publicKey, ip);
+  const result = await db.execute<{ count: number }>(sql`
+    insert into widget_rate_bucket (bucket_key, window_start, count)
+    values (${key}, ${start}, 1)
+    on conflict (bucket_key) do update
+    set
+      count = case
+        when widget_rate_bucket.window_start = ${start} then widget_rate_bucket.count + 1
+        else 1
+      end,
+      window_start = ${start}
+    returning count
+  `);
+  const count = Number(result.rows[0]?.count ?? 0);
+  if (count === 1) {
+    await db.execute(sql`
+      delete from widget_rate_bucket
+      where window_start < ${start - RATE_WINDOW_MS}
+    `);
   }
-  bucket.count += 1;
-  if (store.size > 2000) {
-    for (const [key, value] of store) {
-      if (now - value.start >= WINDOW_MS) store.delete(key);
-    }
-  }
-  return bucket.count <= rateLimitMax();
+  return count > 0 && count <= rateLimitMax();
 }
 
 export function browserOrigin(request: Request) {
@@ -119,7 +115,7 @@ export async function gateWidget(request: Request): Promise<
   if (!originPermitted(request, workspace.allowedDomains)) {
     return widgetJson({ error: "forbidden" }, 403, request);
   }
-  if (request.method !== "OPTIONS" && !takeRateLimit(key, clientIp(request))) {
+  if (request.method !== "OPTIONS" && !(await takeRateLimit(key, clientIp(request)))) {
     return widgetJson({ error: "rate_limit" }, 429, request);
   }
   return { workspace, key };

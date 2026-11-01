@@ -43,6 +43,13 @@
       "when": 1793552593324,
       "tag": "0005_handoff_inbox",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793554578064,
+      "tag": "0006_widget_rate_bucket",
+      "breakpoints": true
     }
   ]
 }

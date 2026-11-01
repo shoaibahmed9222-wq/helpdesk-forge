@@ -1,6 +1,7 @@
 import { answerQuestion } from "@/lib/answer";
 import { AnswerError, type AnswerTurn } from "@/lib/answer-types";
 import { workspaceIdForPublicKey } from "@/lib/llm-config";
+import { toPublicAnswer } from "@/lib/public-answer";
 
 function bearer(request: Request) {
   const match = /^Bearer\s+(\S+)$/i.exec(request.headers.get("authorization") ?? "");
@@ -47,7 +48,7 @@ export async function POST(request: Request) {
 
   try {
     const answer = await answerQuestion({ workspaceId, question, turns });
-    return Response.json(answer);
+    return Response.json(toPublicAnswer(answer));
   } catch (error) {
     if (error instanceof AnswerError) {
       const status = error.code === "question" ? 400 : error.code === "unconfigured" ? 503 : 502;

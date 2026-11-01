@@ -3,9 +3,16 @@ import "server-only";
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 
 function encryptionKey() {
-  const secret = process.env.APP_SECRET?.trim() || process.env.AUTH_SECRET?.trim();
+  const app = process.env.APP_SECRET?.trim() ?? "";
+  const auth = process.env.AUTH_SECRET?.trim() ?? "";
+  const production = process.env.NODE_ENV === "production";
+  const secret = production ? app : app || auth;
   if (!secret) {
-    throw new Error("APP_SECRET or AUTH_SECRET is required to encrypt API keys.");
+    throw new Error(
+      production
+        ? "APP_SECRET is required in production to encrypt API keys."
+        : "APP_SECRET or AUTH_SECRET is required to encrypt API keys.",
+    );
   }
   return createHash("sha256").update(`helpdesk-forge-llm-key:${secret}`).digest();
 }

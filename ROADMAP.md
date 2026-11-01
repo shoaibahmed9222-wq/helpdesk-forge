@@ -8,9 +8,11 @@
 6. **Human handoff inbox** — A person picks up conversations the agent will not answer, replies on the email thread or in the website chat, and can resolve or reopen them. Customers see a handoff message instead of a refusal. Done in [#6](https://github.com/shoaibahmed9222-wq/helpdesk-forge/pull/6).
 7. **Conversations and basic analytics** — History across email and website chat, plus counts for the workspace. Done in [#6](https://github.com/shoaibahmed9222-wq/helpdesk-forge/pull/6).
 
-The v1 target (slices 1–7) is implemented in [#6](https://github.com/shoaibahmed9222-wq/helpdesk-forge/pull/6). Later items are not part of v1.
+The v1 target (slices 1–7) is implemented in [#6](https://github.com/shoaibahmed9222-wq/helpdesk-forge/pull/6).
 
-Later:
+8. **Launch-ready** — Production sign-in mail goes out over the SMTP adapter, embeddings can target any OpenAI-compatible endpoint, the widget rate limit is stored in Postgres, the public ask API returns only the customer-facing answer, CI runs on every pull request, and the README lists the production environment. Local embeddings stay the development default and are refused in production so a cold start does not download model weights.
+
+Later items are not part of v1:
 
 - Shopify and Slack channels
 - Stripe billing

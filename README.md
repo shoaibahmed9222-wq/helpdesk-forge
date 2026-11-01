@@ -21,6 +21,8 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000). Enter an email address. In development, no email is sent: the sign-in link is printed in the terminal running `npm run dev`. Open that link, name your workspace, and you land on the dashboard.
 
+`docker compose up -d` also starts [Mailpit](https://mailpit.axllent.org/) on SMTP port 1025. Its inbox is at [http://localhost:8025](http://localhost:8025). Replies from the app land there. Nothing is delivered to a real mailbox.
+
 ## Environment
 
 | Variable | Purpose |
@@ -34,6 +36,12 @@ Open [http://localhost:3000](http://localhost:3000). Enter an email address. In 
 | `LLM_API_KEY` | Hosted answer-model key, used when a workspace has not saved its own. Falls back to `OPENAI_API_KEY`. |
 | `LLM_MODEL` | Hosted model. Defaults to `gpt-4o-mini`. |
 | `LLM_BASE_URL` | Optional OpenAI-compatible base URL for the hosted key, such as `https://api.groq.com/openai/v1`. |
+| `INBOUND_DOMAIN` | Domain of each workspace's inbound address: `<workspace-slug>@INBOUND_DOMAIN`. |
+| `INBOUND_WEBHOOK_SECRET` | Shared secret for `POST /api/email/inbound`. Send it as `Authorization: Bearer <secret>`, or as the password in HTTP Basic auth. |
+| `SMTP_HOST` | SMTP host for replies. Mailpit uses `127.0.0.1`. |
+| `SMTP_PORT` | SMTP port. Mailpit uses `1025`. |
+| `SMTP_USER` | Optional SMTP username. Leave empty for Mailpit. |
+| `SMTP_PASS` | Optional SMTP password. Leave empty for Mailpit. |
 
 ## Knowledge base
 
@@ -43,7 +51,7 @@ Workspace owners add `.md`, `.txt`, or `.pdf` files, or paste text, on **Knowled
 
 ## Answers
 
-`answerQuestion` in `src/lib/answer.ts` is the channel-agnostic entry point. The dashboard and `POST /api/answer` both call it. A later widget or email channel should call it too. It does not store the conversation.
+`answerQuestion` in `src/lib/answer.ts` is the channel-agnostic entry point. The dashboard, `POST /api/answer`, and the email channel all call it. The email channel stores the thread. `answerQuestion` itself does not. A later widget should call it too.
 
 It retrieves that workspace's passages, asks the model to answer only from those passages, and returns the answer, citations, and a `confident` or `unsure` signal with a reason. A citation is the document title plus the passage id and its position (`chunk.position`, starting at 0).
 
@@ -75,6 +83,28 @@ The key is encrypted with AES-256-GCM before it is written to `workspace.llm_api
 In development, when there is no workspace key and no hosted key, a dev provider quotes a passage only when most of the question's words appear in it. Otherwise it returns unsure. It is labelled in the dashboard and in the answer reason. It is not an LLM. Production returns an error instead of using it.
 
 **Test your agent** shows the answer, the confident or unsure flag, the reason, and citations. A citation opens the source passage.
+
+## Email
+
+Each workspace has one inbound address, shown on the dashboard and on **Settings**: `<workspace-slug>@INBOUND_DOMAIN`. Forward or CC the support inbox to that address. The reply goes to the inbound message's Reply-To, or to From when Reply-To is empty, with `Re:` and `In-Reply-To` / `References` so it lands on the same ticket.
+
+On **Settings**, the owner chooses:
+
+- **Auto-reply when confident** — a covered question is sent immediately.
+- **Draft only** — the reply is saved on **Conversations** until someone clicks **Send reply**.
+
+If the docs do not cover the question, nothing is sent in either mode. The thread is listed under **Handoffs**. The email never includes the confidence flag or the internal reason. Doc titles are added in a short footer.
+
+The inbound webhook is `POST /api/email/inbound`. It accepts [Postmark's inbound JSON](https://postmarkapp.com/developer/webhooks/inbound-webhook). Authenticate with the shared secret:
+
+```http
+POST /api/email/inbound
+Authorization: Bearer <INBOUND_WEBHOOK_SECRET>
+```
+
+Postmark can use HTTP Basic auth instead. The password is the same secret. The username can be anything. An unknown recipient is rejected. A repeated Message-ID is ignored. So are auto-replies and bounces (`Auto-Submitted` other than `no`, `Precedence: bulk` or `auto_reply`) and mail sent from one of our own inbound addresses.
+
+Replies are sent over SMTP from the workspace address. For local development, Mailpit is the SMTP server. A production deploy needs a domain you control and an inbound provider that POSTs this JSON. Point the domain's MX at that provider, set the webhook URL to this route, and set `INBOUND_DOMAIN` to that domain.
 
 ## Embeddings
 

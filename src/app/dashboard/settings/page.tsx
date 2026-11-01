@@ -1,7 +1,8 @@
+import { getReplyMode, workspaceInboundAddress } from "@/lib/email-channel";
 import { llmStatus } from "@/lib/llm-config";
 import { requireWorkspace } from "@/lib/workspace";
 
-import { clearLlmSettings, saveLlmSettings } from "./actions";
+import { clearLlmSettings, saveEmailReplyMode, saveLlmSettings } from "./actions";
 import { SubmitButton } from "../knowledge-base/submit-button";
 
 export const metadata = { title: "Settings · Helpdesk Forge" };
@@ -12,6 +13,7 @@ const errorCopy: Record<string, string> = {
   model: "Enter a model name, such as gpt-4o-mini.",
   base: "Enter an https base URL. http is allowed only for localhost.",
   key: "Enter an API key. It is stored encrypted and is not shown again.",
+  reply: "Choose auto-reply or draft only.",
 };
 
 function first(value: string | string[] | undefined) {
@@ -32,6 +34,8 @@ export default async function SettingsPage({
 }) {
   const { workspace, role } = await requireWorkspace();
   const status = await llmStatus(workspace.id);
+  const replyMode = await getReplyMode(workspace.id);
+  const address = workspaceInboundAddress(workspace.slug);
   const error = errorCopy[first((await searchParams).error) ?? ""] ?? null;
 
   return (
@@ -50,6 +54,73 @@ export default async function SettingsPage({
           The saved key could not be read. Remove it and enter it again.
         </p>
       ) : null}
+
+      <section className="space-y-4 rounded-lg border border-line bg-card p-5">
+        <div className="space-y-2">
+          <h2 className="text-sm font-medium">Email</h2>
+          <p className="text-sm leading-6 text-muted">
+            Forward or CC your support inbox to this address. Replies stay on
+            the same email thread.
+          </p>
+          {address ? (
+            <p className="break-all rounded-md bg-paper px-3 py-2 font-mono text-sm">{address}</p>
+          ) : (
+            <p className="text-sm leading-6 text-muted">
+              Your inbound address is not ready yet. The person who runs
+              Helpdesk Forge still needs to finish email setup.
+            </p>
+          )}
+        </div>
+        {role === "owner" ? (
+          <form action={saveEmailReplyMode} className="space-y-3">
+            <fieldset className="space-y-3">
+              <legend className="text-sm font-medium">Replies</legend>
+              <label className="flex items-start gap-3 text-sm leading-6">
+                <input
+                  type="radio"
+                  name="replyMode"
+                  value="auto"
+                  defaultChecked={replyMode === "auto"}
+                  className="mt-1"
+                />
+                <span>
+                  <span className="font-medium">Auto-reply when confident</span>
+                  <span className="block text-muted">
+                    Send the reply when your docs cover the question.
+                  </span>
+                </span>
+              </label>
+              <label className="flex items-start gap-3 text-sm leading-6">
+                <input
+                  type="radio"
+                  name="replyMode"
+                  value="draft"
+                  defaultChecked={replyMode === "draft"}
+                  className="mt-1"
+                />
+                <span>
+                  <span className="font-medium">Draft only</span>
+                  <span className="block text-muted">
+                    Save the reply here for someone on your team to review and
+                    send.
+                  </span>
+                </span>
+              </label>
+            </fieldset>
+            <p className="text-sm leading-6 text-muted">
+              If your docs do not cover the question, nothing is emailed. It
+              shows up under Handoffs for a person to handle.
+            </p>
+            <SubmitButton label="Save reply mode" pendingLabel="Saving…" />
+          </form>
+        ) : (
+          <p className="text-sm leading-6 text-muted">
+            {replyMode === "auto"
+              ? "Auto-reply when confident is on. Only the workspace owner can change it."
+              : "Draft only is on. Only the workspace owner can change it."}
+          </p>
+        )}
+      </section>
 
       <section className="space-y-3 rounded-lg border border-line bg-card p-5">
         <h2 className="text-sm font-medium">Answer API</h2>

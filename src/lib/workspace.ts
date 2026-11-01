@@ -11,7 +11,12 @@ export async function getMembership(userId: string) {
   const [membership] = await db
     .select({
       role: memberships.role,
-      workspace: workspaces,
+      workspace: {
+        id: workspaces.id,
+        name: workspaces.name,
+        slug: workspaces.slug,
+        createdAt: workspaces.createdAt,
+      },
     })
     .from(memberships)
     .innerJoin(workspaces, eq(memberships.workspaceId, workspaces.id))

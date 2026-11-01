@@ -72,6 +72,16 @@ export const workspaces = pgTable("workspace", {
     .$defaultFn(() => crypto.randomUUID()),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
+  // Bearer token for POST /api/answer. It picks the workspace. It is not the model key.
+  publicKey: text("public_key")
+    .notNull()
+    .unique()
+    .$defaultFn(() => `pk_${crypto.randomUUID().replaceAll("-", "")}`),
+  llmProvider: text("llm_provider").$type<"openai" | "compatible">(),
+  llmModel: text("llm_model"),
+  llmBaseUrl: text("llm_base_url"),
+  // AES-256-GCM ciphertext. The plaintext key is never sent to the client.
+  llmApiKey: text("llm_api_key"),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
 });
 

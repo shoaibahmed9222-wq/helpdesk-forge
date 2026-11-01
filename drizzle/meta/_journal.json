@@ -15,6 +15,13 @@
       "when": 1793480178555,
       "tag": "0001_kind_rawhide_kid",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793485967553,
+      "tag": "0002_tough_praxagora",
+      "breakpoints": true
     }
   ]
 }

@@ -5,9 +5,11 @@ import { usePathname } from "next/navigation";
 
 const items = [
   { href: "/dashboard/knowledge-base", label: "Knowledge base" },
+  { href: "/dashboard/test", label: "Test your agent" },
   { href: "/dashboard/conversations", label: "Conversations" },
   { href: "/dashboard/handoffs", label: "Handoffs" },
   { href: "/dashboard/analytics", label: "Analytics" },
+  { href: "/dashboard/settings", label: "Settings" },
 ];
 
 export function DashboardNav() {
